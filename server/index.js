@@ -1,38 +1,58 @@
-import express from "express";
-import http from "http";
-import { Server } from "socket.io";
-import cors from "cors";
-import fs from "fs";
+// server/index.js
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+// ---- Setup paths ----
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ---- Express + Socket.io ----
 const app = express();
-app.use(cors({ origin: "*" })); // tighten to your intranet origin later
+app.use(cors());
 
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" } // tighten later
-});
+const io = new Server(server, { cors: { origin: '*' } });
 
-// demo file: server/positions.json (edit freely)
-const readPositions = () => {
-  try {
-    const raw = fs.readFileSync(new URL("./positions.json", import.meta.url));
-    return JSON.parse(raw.toString());
-  } catch {
-    return { btc: 30, sol: 20, lite: 40, eth: 10 };
-  }
-};
+// ---- Socket.io Events ----
+io.on('connection', (socket) => {
+  console.log('Client connected');
 
-// health check
-app.get("/health", (_req, res) => res.send("ok"));
+  socket.on('get_positions', () => {
+    try {
+      const dataPath = path.join(__dirname, 'positions.json');
+      const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+      socket.emit('positions', data);
+    } catch (err) {
+      console.error('Error reading positions.json:', err);
+      socket.emit('error', { message: 'Could not load positions data.' });
+    }
+  });
 
-io.on("connection", (socket) => {
-  // Optional: verify auth here (cookie/JWT) before serving data
-  socket.on("get_positions", (userId) => {
-    // TODO: use userId to fetch user-specific data
-    const positions = readPositions();
-    socket.emit("positions", positions);
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
   });
 });
 
-const PORT = process.env.PORT || 8081;
-server.listen(PORT, () => console.log(`Socket.io server on :${PORT}`));
+// ---- Serve static files from /public ----
+const clientPath = path.join(__dirname, 'public');
+if (fs.existsSync(clientPath)) {
+  app.use(express.static(clientPath));
+
+  // ✅ Correct fallback route for Express 5
+  app.use((_req, res) => {
+    res.sendFile(path.join(clientPath, 'index.html'));
+  });
+} else {
+  console.warn('⚠️  Public folder not found. Make sure /server/public exists.');
+}
+
+// ---- Start Server ----
+const PORT = 8081;
+server.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+});

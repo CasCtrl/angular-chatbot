@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Internal Chatbot Prototype</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; }
+    header { padding:16px; border-bottom:1px solid #eee; }
+    .fab{position:fixed;bottom:24px;right:24px;background:#125B50;color:#fff;border:none;
+         border-radius:50%;width:56px;height:56px;font-size:24px;cursor:pointer}
+    .panel{position:fixed;bottom:90px;right:20px;width:340px;background:#fff;border:1px solid #ddd;
+           border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.2);display:none;flex-direction:column}
+    .header{padding:10px 12px;font-weight:600;background:#f6f6f6;border-bottom:1px solid #ddd}
+    .body{padding:10px;max-height:380px;overflow:auto}
+    .bubble{margin:5px 0;padding:8px 10px;border-radius:8px;background:#e8f0fe;width:fit-content}
+    .user{margin-left:auto;background:#125B50;color:#fff}
+    form{display:flex;padding:8px;border-top:1px solid #eee}
+    input{flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:8px;margin-right:6px}
+    .chart-wrap{width:260px;height:260px;margin:10px auto}
+  </style>
+</head>
+<body>
+  <header>
+    <h2>Internal Chatbot Prototype</h2>
+    <p>FAB chatbot demo using Socket.io + Chart.js</p>
+  </header>
+
+  <button class="fab" id="fab">💬</button>
+  <section class="panel" id="panel">
+    <div class="header">Assistant</div>
+    <div class="body" id="log">
+      <div class="bubble">Hi! Ask me “show me my positions”.</div>
+    </div>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    <form id="form">
+      <input id="draft" placeholder='Ask me "show me my positions"' autocomplete="off" />
+      <button type="submit">Send</button>
+    </form>
+  </section>
+
+  <!-- Socket.IO + Chart.js (CDN) -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    const fab   = document.getElementById('fab');
+    const panel = document.getElementById('panel');
+    const log   = document.getElementById('log');
+    const form  = document.getElementById('form');
+    const draft = document.getElementById('draft');
+    const ctx   = document.getElementById('chart').getContext('2d');
+
+    fab.onclick = () => panel.style.display = (panel.style.display === 'flex' ? 'none' : 'flex');
+
+    function add(from, text){
+      const b = document.createElement('div');
+      b.className = 'bubble' + (from === 'user' ? ' user' : '');
+      b.textContent = text;
+      log.appendChild(b); log.scrollTop = log.scrollHeight;
+    }
+
+    const socket = io(); // same-origin (http://localhost:8081)
+    let chart;
+
+    socket.on('connect', () => add('bot', 'Connected.'));
+
+    socket.on('positions', (data) => {
+      add('bot', 'Here’s your portfolio allocation.');
+      const labels = Object.keys(data).map(k => k.toUpperCase());
+      const values = Object.values(data);
+
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'pie',
+        data: { labels, datasets: [{ data: values }] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+      });
+    });
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const text = draft.value.trim();
+      if (!text) return;
+      add('user', text);
+      draft.value = '';
+      if (/show me my positions/i.test(text)) {
+        add('bot', 'Fetching your positions…');
+        socket.emit('get_positions', 'demo-user');
+      } else {
+        add('bot', 'Try asking about your positions.');
+      }
+    };
+  </script>
+</body>
+</html>
