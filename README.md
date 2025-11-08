@@ -4,6 +4,7 @@ A minimal full-stack demo showing how to connect an Angular front-end to an Expr
 The backend serves static files, provides live data updates via WebSockets, and reads from a local `positions.json` file.
 
 ---
+!alt text[](https://ss-1.png)
 
 ## 🔧 Project Structure
 
